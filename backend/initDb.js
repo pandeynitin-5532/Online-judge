@@ -18,6 +18,22 @@ db.serialize(() => {
 
     console.log("Problems table checked/created.");
 
+    // NEW ADDITION: Create the submissions table using your exact syntax style
+    // Note: problem_id is TEXT to correctly align with problems.id
+    db.run(`
+        CREATE TABLE IF NOT EXISTS submissions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            problem_id TEXT NOT NULL,
+            language TEXT NOT NULL,
+            code TEXT NOT NULL,
+            verdict TEXT NOT NULL,
+            submitted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (problem_id) REFERENCES problems(id)
+        )
+    `);
+
+    console.log("Submissions table checked/created.");
+
     // 2. Data array for 10 problems
     const sampleProblems = [
         {
