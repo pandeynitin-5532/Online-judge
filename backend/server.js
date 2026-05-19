@@ -105,13 +105,18 @@ app.post('/api/submissions', async (req, res) => {
         // Run the code through your execution engine
         const verdict = await executeCode(language, code, testCases);
 
-        // Fixed: Using async/await structure with the promise-based wrapper
+        // FIX: Generate a localized ISO timestamp string to override SQLite's default UTC clock
+        const now = new Date();
+        const offsetMs = now.getTimezoneOffset() * 60 * 1000;
+        const localISOTime = new Date(now.getTime() - offsetMs).toISOString().replace('T', ' ').slice(0, 19);
+
+        // Updated query: Explicitly passing our calculated localISOTime string to the 'submitted_at' column
         await db.run(
-            `INSERT INTO submissions (problem_id, language, code, verdict) VALUES (?, ?, ?, ?)`,
-            [problemId, language, code, verdict]
+            `INSERT INTO submissions (problem_id, language, code, verdict, submitted_at) VALUES (?, ?, ?, ?, ?)`,
+            [problemId, language, code, verdict, localISOTime]
         );
 
-        console.log(`[Database Log] Submission saved successfully into history.`);
+        console.log(`[Database Log] Submission saved successfully into history with local timestamp: ${localISOTime}`);
 
         // Return the evaluation result directly back to your React app
         return res.json({ success: true, verdict: verdict });
@@ -122,12 +127,57 @@ app.post('/api/submissions', async (req, res) => {
     }
 });
 
-// 4. GET endpoint to fetch execution history for a single problem
-app.get('/api/problems/:id/submissions', async (req, res) => {
-    const problemId = req.params.id;
+// ==========================================
+// 4. FIXED: Ephemeral Testcase Playground Route
+// ==========================================
+app.post('/api/run-code', async (req, res) => {
+    const { problemId, language, code, customInput } = req.body;
+
+    if (!code || !language || !problemId) {
+        return res.status(400).json({ success: false, message: "Missing required execution parameters." });
+    }
 
     try {
-        // Fixed: Using async/await structure with the promise-based wrapper
+        console.log(`\n[Playground Engine] Running ad-hoc testing for problem: ${problemId} (${language})`);
+
+        // FIXED: problem_id is explicitly specified so executeCode.js can link metadata variables!
+        const mockTestCases = [{
+            problem_id: problemId,
+            input_data: customInput || "",
+            expected_output: "" 
+        }];
+
+        // Pass straight into your core compiler pipeline
+        const rawVerdict = await executeCode(language, code, mockTestCases);
+
+        let responsePayload = {
+            status: "Success",
+            stdout: rawVerdict
+        };
+
+        // If your compiler logs or outputs contain explicit error tokens, mark as runtime error
+        if (rawVerdict.toLowerCase().includes("error") || rawVerdict.toLowerCase().includes("failed")) {
+            responsePayload.status = "Runtime Error";
+            responsePayload.compile_error = rawVerdict;
+        }
+
+        return res.json(responsePayload);
+
+    } catch (error) {
+        console.error("Playground processing error:", error);
+        return res.status(500).json({ 
+            status: "Runtime Error", 
+            stderr: "Internal judging matrix failed to process runner execution loop." 
+        });
+    }
+});
+
+// 5. GET endpoint to fetch execution history for a single problem
+app.get('/api/problems/:id/submissions', async (req, res) => {
+    // Explicitly cast the incoming route param to a String to match TEXT schema columns
+    const problemId = String(req.params.id); 
+
+    try {
         const rows = await db.all(
             `SELECT id, language, code, verdict, submitted_at 
              FROM submissions 
@@ -136,10 +186,12 @@ app.get('/api/problems/:id/submissions', async (req, res) => {
             [problemId]
         );
         
-        // Send the array of past submissions back to the frontend
-        return res.json(rows);
+        // Return structured JSON
+        return res.json({ success: true, submissions: rows });
     } catch (error) {
         console.error("Error running history query:", error.message);
         return res.status(500).json({ success: false, error: "Failed to grab historical log rows." });
     }
 });
+
+module.exports = app;

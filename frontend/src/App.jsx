@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import ProblemWorkspace from './ProblemWorkspace';
 
-function App() {
+// 1. Dashboard Sub-Component (Extracted clean from your original App function)
+function ProblemDashboard() {
   const [problems, setProblems] = useState([]);
-  const [selectedProblemId, setSelectedProblemId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate(); // Hook to change browser URLs smoothly
 
-  // Fetch the list of problems from Express when dashboard mounts
   useEffect(() => {
     fetch('http://localhost:5000/api/problems')
       .then((res) => res.json())
@@ -22,16 +23,6 @@ function App() {
       });
   }, []);
 
-  // If a problem is clicked, show the workspace for that problem
-  if (selectedProblemId) {
-    return (
-      <ProblemWorkspace 
-        problemId={selectedProblemId} 
-        onBack={() => setSelectedProblemId(null)} 
-      />
-    );
-  }
-
   return (
     <div style={{ backgroundColor: '#111827', color: '#fff', minHeight: '100vh', fontFamily: 'sans-serif', padding: '40px' }}>
       <div style={{ maxWidth: '800px', margin: '0 auto' }}>
@@ -45,7 +36,7 @@ function App() {
             {problems.map((prob, index) => (
               <div 
                 key={prob.id}
-                onClick={() => setSelectedProblemId(prob.id)}
+                onClick={() => navigate(`/problem/${prob.id}`)} // Refactored to drive routing pathways
                 style={{
                   backgroundColor: '#1f2937',
                   padding: '20px',
@@ -70,6 +61,24 @@ function App() {
         )}
       </div>
     </div>
+  );
+}
+
+// 2. Main App Router Wrapper Shell
+function App() {
+  return (
+    <Router>
+      <Routes>
+        {/* Main Dashboard view */}
+        <Route path="/" element={<ProblemDashboard />} />
+        
+        {/* Dynamic code evaluation workplace view mapping :id parameters */}
+        <Route path="/problem/:id" element={<ProblemWorkspace />} />
+        
+        {/* Fallback structural route redirects wildcards cleanly back to dashboard */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Router>
   );
 }
 
