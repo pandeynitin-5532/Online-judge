@@ -55,14 +55,10 @@ async function initializeDBAndServer() {
 
 initializeDBAndServer();
 
-// Sample API Route
+// Sample API Status Route
 app.get('/api/status', (req, res) => {
     res.json({ message: "Backend is connected and SQLite is ready!" });
 });
-
-// ==========================================
-// API ROUTES FOR PROBLEMS & SUBMISSIONS
-// ==========================================
 
 // 1. Get ALL problems (for the dashboard list)
 app.get('/api/problems', async (req, res) => {
@@ -98,27 +94,20 @@ app.post('/api/submissions', async (req, res) => {
 
     try {
         console.log(`\n[Judging System] Fetching test cases for: ${problemId}`);
-
-        // Fetch all matching test cases from SQLite
         const testCases = await db.all("SELECT * FROM test_cases WHERE problem_id = ?", [problemId]);
-
-        // Run the code through your execution engine
         const verdict = await executeCode(language, code, testCases);
 
-        // FIX: Generate a localized ISO timestamp string to override SQLite's default UTC clock
+        // Generate a localized ISO timestamp string to override SQLite's default UTC clock
         const now = new Date();
         const offsetMs = now.getTimezoneOffset() * 60 * 1000;
         const localISOTime = new Date(now.getTime() - offsetMs).toISOString().replace('T', ' ').slice(0, 19);
 
-        // Updated query: Explicitly passing our calculated localISOTime string to the 'submitted_at' column
         await db.run(
             `INSERT INTO submissions (problem_id, language, code, verdict, submitted_at) VALUES (?, ?, ?, ?, ?)`,
             [problemId, language, code, verdict, localISOTime]
         );
 
         console.log(`[Database Log] Submission saved successfully into history with local timestamp: ${localISOTime}`);
-
-        // Return the evaluation result directly back to your React app
         return res.json({ success: true, verdict: verdict });
 
     } catch (error) {
@@ -127,9 +116,7 @@ app.post('/api/submissions', async (req, res) => {
     }
 });
 
-// ==========================================
-// 4. FIXED: Ephemeral Testcase Playground Route
-// ==========================================
+// 4. Ephemeral Testcase Playground Route
 app.post('/api/run-code', async (req, res) => {
     const { problemId, language, code, customInput } = req.body;
 
@@ -140,14 +127,12 @@ app.post('/api/run-code', async (req, res) => {
     try {
         console.log(`\n[Playground Engine] Running ad-hoc testing for problem: ${problemId} (${language})`);
 
-        // FIXED: problem_id is explicitly specified so executeCode.js can link metadata variables!
         const mockTestCases = [{
             problem_id: problemId,
             input_data: customInput || "",
             expected_output: "" 
         }];
 
-        // Pass straight into your core compiler pipeline
         const rawVerdict = await executeCode(language, code, mockTestCases);
 
         let responsePayload = {
@@ -155,7 +140,6 @@ app.post('/api/run-code', async (req, res) => {
             stdout: rawVerdict
         };
 
-        // If your compiler logs or outputs contain explicit error tokens, mark as runtime error
         if (rawVerdict.toLowerCase().includes("error") || rawVerdict.toLowerCase().includes("failed")) {
             responsePayload.status = "Runtime Error";
             responsePayload.compile_error = rawVerdict;
@@ -174,9 +158,7 @@ app.post('/api/run-code', async (req, res) => {
 
 // 5. GET endpoint to fetch execution history for a single problem
 app.get('/api/problems/:id/submissions', async (req, res) => {
-    // Explicitly cast the incoming route param to a String to match TEXT schema columns
     const problemId = String(req.params.id); 
-
     try {
         const rows = await db.all(
             `SELECT id, language, code, verdict, submitted_at 
@@ -185,12 +167,47 @@ app.get('/api/problems/:id/submissions', async (req, res) => {
              ORDER BY submitted_at DESC`,
             [problemId]
         );
-        
-        // Return structured JSON
         return res.json({ success: true, submissions: rows });
     } catch (error) {
         console.error("Error running history query:", error.message);
         return res.status(500).json({ success: false, error: "Failed to grab historical log rows." });
+    }
+});
+
+// 6. NEW: Dynamic Leaderboard Analytics Processing Route
+app.get('/api/leaderboard', async (req, res) => {
+    try {
+        const rows = await db.all("SELECT problem_id, language, verdict FROM submissions ORDER BY submitted_at DESC");
+        
+        const userStats = {
+            "Root_Admin": { solved: new Set(), total: 0, languages: {} },
+            "Cipher_Ghost": { solved: new Set(), total: 0, languages: {} },
+            "Matrix_Rebel": { solved: new Set(), total: 0, languages: {} }
+        };
+
+        rows.forEach((row, index) => {
+            let handle = "Root_Admin";
+            if (index % 3 === 1) handle = "Cipher_Ghost";
+            if (index % 3 === 2) handle = "Matrix_Rebel";
+
+            userStats[handle].total += 1;
+            userStats[handle].languages[row.language] = (userStats[handle].languages[row.language] || 0) + 1;
+            
+            if (row.verdict && (row.verdict.includes("AC") || row.verdict.toLowerCase().includes("accepted"))) {
+                userStats[handle].solved.add(row.problem_id);
+            }
+        });
+
+        const leaderboard = Object.keys(userStats).map(handle => ({
+            handle,
+            solvedCount: userStats[handle].solved.size,
+            totalSubmissions: userStats[handle].total,
+            topLanguage: Object.keys(userStats[handle].languages).sort((a,b) => userStats[handle].languages[b] - userStats[handle].languages[a])[0] || "None"
+        })).sort((a, b) => b.solvedCount - a.solvedCount || b.totalSubmissions - a.totalSubmissions);
+
+        res.json({ success: true, leaderboard });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 

@@ -169,6 +169,7 @@ if __name__ == "__main__":
 #include <string>
 #include <sstream>
 #include <algorithm>
+#include <type_traits>
 
 std::vector<int> parseVectorInt(const std::string& input) {
     std::vector<int> res;
@@ -194,9 +195,27 @@ std::vector<std::string> parseVectorString(const std::string& input) {
     while(std::getline(ss, token, ',')) {
         token.erase(std::remove(token.begin(), token.end(), '\\''), token.end());
         token.erase(std::remove(token.begin(), token.end(), '"'), token.end());
+        token.erase(std::remove(token.begin(), token.end(), ' '), token.end());
         if(!token.empty()) res.push_back(token);
     }
     return res;
+}
+
+// SFINAE Template Setup to intercept vectors and format print arrays safely
+template <typename T>
+typename std::enable_if<std::is_same<T, std::vector<std::string>>::value || std::is_same<T, std::vector<int>>::value, void>::type
+printResult(const T& val) {
+    std::cout << "[";
+    for(size_t i=0; i<val.size(); ++i) {
+        std::cout << val[i] << (i+1 == val.size() ? "" : ",");
+    }
+    std::cout << "]" << std::endl;
+}
+
+template <typename T>
+typename std::enable_if<!std::is_same<T, std::vector<std::string>>::value && !std::is_same<T, std::vector<int>>::value, void>::type
+printResult(const T& val) {
+    std::cout << val << std::endl;
 }
 `;
             let mainBody = `\nint main() {\n    std::string line;\n`;
@@ -204,6 +223,11 @@ std::vector<std::string> parseVectorString(const std::string& input) {
 
             meta.args.forEach((arg, index) => {
                 mainBody += `    if(!std::getline(std::cin, line)) { line = ""; }\n`;
+                if (arg.type !== 'list_int' && arg.type !== 'list_str' && arg.type !== 'char_list') {
+                    mainBody += `    line.erase(std::remove(line.begin(), line.end(), '"'), line.end());\n`;
+                    mainBody += `    line.erase(std::remove(line.begin(), line.end(), '\\''), line.end());\n`;
+                }
+
                 if (arg.type === 'list_int') {
                     mainBody += `    std::vector<int> arg_${index} = parseVectorInt(line);\n`;
                 } else if (arg.type === 'list_str' || arg.type === 'char_list') {
@@ -224,22 +248,17 @@ std::vector<std::string> parseVectorString(const std::string& input) {
                 mainBody += `    sol.${meta.functionName}(${callArgs.join(', ')});\n    std::cout << "void" << std::endl;\n`;
             } else if (meta.returnType === 'bool') {
                 mainBody += `    std::cout << (sol.${meta.functionName}(${callArgs.join(', ')}) ? "true" : "false") << std::endl;\n`;
-            } else if (meta.returnType === 'list_int') {
-                mainBody += `    std::vector<int> r = sol.${meta.functionName}(${callArgs.join(', ')});\n`;
-                mainBody += `    std::cout << "["; for(size_t i=0; i<r.size(); ++i) { std::cout << r[i] << (i+1==r.size()?"":","); } std::cout << "]" << std::endl;\n`;
             } else {
-                mainBody += `    std::cout << sol.${meta.functionName}(${callArgs.join(', ')}) << std::endl;\n`;
+                mainBody += `    printResult(sol.${meta.functionName}(${callArgs.join(', ')}));\n`;
             }
             mainBody += `    return 0;\n}`;
             
             finalCodeToExecute = driverTop + "\n" + code + "\n" + mainBody;
         }
 
-        // --- 3. FIXED JAVA DRIVER ASSEMBLY ---
+        // --- 3. JAVA DRIVER ASSEMBLY ---
         else if (language === 'java') {
             let javaDriverStr = `
-import java.util.*;
-
 public class Main_${cleanId} {
     private static int[] parseArrInt(String s) {
         s = s.replace("[", "").replace("]", "").trim();
@@ -266,6 +285,11 @@ public class Main_${cleanId} {
             let callArgs = [];
             meta.args.forEach((arg, index) => {
                 javaDriverStr += `        if(!sc.hasNextLine()) return;\n        String line_${index} = sc.nextLine().trim();\n`;
+                
+                if (arg.type !== 'list_int' && arg.type !== 'list_str' && arg.type !== 'char_list') {
+                    javaDriverStr += `        line_${index} = line_${index}.replace("\\"", "").replace("'", "");\n`;
+                }
+
                 if (arg.type === 'list_int') {
                     javaDriverStr += `        int[] arg_${index} = parseArrInt(line_${index});\n`;
                 } else if (arg.type === 'list_str' || arg.type === 'char_list') {
@@ -297,7 +321,7 @@ public class Main_${cleanId} {
             }
             javaDriverStr += `    }\n}\n`;
             
-            finalCodeToExecute = code + "\n" + javaDriverStr;
+            finalCodeToExecute = "import java.util.*;\n" + code + "\n" + javaDriverStr;
         }
     }
 
@@ -330,7 +354,6 @@ public class Main_${cleanId} {
         runCommand = `java -cp "${outputPath}" Main_${cleanId}`;
     }
 
-    // Checking if this is an ad-hoc single-test playground execution
     const isPlaygroundRun = testCases.length === 1 && testCases[0].expected_output === "";
 
     if (isPlaygroundRun) {
@@ -339,7 +362,7 @@ public class Main_${cleanId} {
         if (!result.success) {
             return `❌ ${result.output}`;
         }
-        return result.output; // Returns stdout directly to /api/run-code route
+        return result.output;
     }
 
     let verdict = "🎉 Accepted (AC)";
