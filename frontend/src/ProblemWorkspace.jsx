@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Editor from '@monaco-editor/react';
 import { useParams, useNavigate } from 'react-router-dom';
-
+ const API_BASE_URL ='https://sasquatch-acrobat-divinely.ngrok-free.dev';
 /* ═══════════════════════════════════════════════════════════════
    GLOBAL CSS — ZERO COMPROMISE EDITION
    ═══════════════════════════════════════════════════════════════ */
@@ -270,7 +270,7 @@ body::after{
   background-size:200% 100%;
   animation:shimmer 2s infinite;
 }
-.diff-easy  {background:var(--mdim);color:var(--mint);border-left:2px solid var(--mint);}
+.diff-easy   {background:var(--mdim);color:var(--mint);border-left:2px solid var(--mint);}
 .diff-medium{background:var(--gdim);color:var(--gold);border-left:2px solid var(--gold);}
 .diff-hard  {background:var(--rdim);color:var(--crit);border-left:2px solid var(--crit);}
 
@@ -710,6 +710,55 @@ function LineCounter({ lines }) {
   );
 }
 
+/* ─── PHASE 4: LOCAL INNER PROBLEM LEADERBOARD GRID COMPONENT ────────── */
+function ProblemInnerLeaderboardGrid({ problemId, refreshTrigger }) {
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetchRecords = () => {
+    setLoading(true);
+    fetch(`http://10.137.89.126:5000/api/leaderboard/problem/${problemId}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) setRecords(data.leaderboard);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    if (problemId) fetchRecords();
+  }, [problemId, refreshTrigger]);
+
+  return (
+    <div style={{ marginTop: 20, borderTop: '1px dashed var(--border3)', paddingTop: 16 }}>
+      <div className="section-label" style={{ marginBottom: 12, color: 'var(--elec)' }}>🔥 SPEEDRUN RANKINGS MATRIX</div>
+      {loading ? (
+        <div className="mono" style={{ fontSize: 10, color: 'var(--text-3)' }}>FETCHING SECURE DATA CORES...</div>
+      ) : records.length === 0 ? (
+        <div className="mono" style={{ fontSize: 10, color: 'var(--text-4)', fontStyle: 'italic' }}>No fast executions recorded yet.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+          {records.map((r, i) => (
+            <div key={i} style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border)',
+              borderRadius: 6, padding: '8px 12px', fontSize: 11, fontFamily: 'monospace'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ color: 'var(--text-4)' }}>#{i + 1}</span>
+                <span style={{ color: 'var(--text-1)', fontWeight: 'bold' }}>{r.handle}</span>
+                <span style={{ fontSize: 9, color: LangColor[r.language], background: 'var(--raised)', padding: '1px 5px', borderRadius: 3 }}>{r.language}</span>
+              </div>
+              <span style={{ color: 'var(--mint)', fontWeight: 'bold' }}>{r.best_runtime_ms.toFixed(3)} ms</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ══════════════════════════════════════════════════════════════════
    MAIN COMPONENT
    ══════════════════════════════════════════════════════════════════ */
@@ -731,6 +780,7 @@ export default function ProblemWorkspace() {
   const [customInput, setCustomInput] = useState('');
   const [isRunningCode, setIsRunningCode] = useState(false);
   const [runResult, setRunResult] = useState(null);
+  const [leaderboardRefresh, setLeaderboardRefresh] = useState(0);
 
   const styleRef = useRef(null);
 
@@ -746,7 +796,7 @@ export default function ProblemWorkspace() {
   }, []);
 
   useEffect(() => {
-    fetch(`http://localhost:5000/api/problems/${problemId}`)
+    fetch(`http://10.137.89.126:5000/api/problems/${problemId}`)
       .then(r => r.json())
       .then(d => {
         if (d.success) {
@@ -767,8 +817,11 @@ export default function ProblemWorkspace() {
   }, [selectedLanguage, problem]);
 
   const fetchHistory = () => {
+    const token = localStorage.getItem('oj_token');
     setIsLoadingHistory(true);
-    fetch(`http://localhost:5000/api/problems/${problemId}/submissions`)
+    fetch(`http://10.137.89.126:5000/api/problems/${problemId}/submissions`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
       .then(r => r.json())
       .then(d => {
         if (Array.isArray(d)) setSubmissionsList(d);
@@ -782,32 +835,50 @@ export default function ProblemWorkspace() {
   useEffect(() => { if (activeTab === 'submissions') fetchHistory(); }, [activeTab]);
 
   const handleSubmitCode = async () => {
+    const token = localStorage.getItem('oj_token');
     setIsSubmitting(true);
     setCurrentVerdict('JUDGING...');
     try {
-      const r = await fetch('http://localhost:5000/api/submissions', {
+      const r = await fetch('http://10.137.89.126:5000/api/submissions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ problemId, language: selectedLanguage, code: codeValue }),
       });
       const d = await r.json();
-      setCurrentVerdict(d.success ? d.verdict.toUpperCase() : (d.message?.toUpperCase() || 'EXECUTION FAILED'));
-      if (d.success) fetchHistory();
+      
+      if (d.success) {
+        setCurrentVerdict(`${d.verdict.toUpperCase()} (${d.runtime_ms.toFixed(2)}ms)`);
+        fetchHistory();
+        setLeaderboardRefresh(prev => prev + 1); // Auto refresh the inner rankings matrix
+      } else {
+        setCurrentVerdict(d.message?.toUpperCase() || 'EXECUTION FAILED');
+      }
     } catch { setCurrentVerdict('CONNECTION ERROR'); }
     finally { setIsSubmitting(false); }
   };
 
   const handleRunCode = async () => {
+    const token = localStorage.getItem('oj_token');
     setIsRunningCode(true);
     setIsConsoleOpen(true);
     setRunResult(null);
     try {
-      const r = await fetch('http://localhost:5000/api/run-code', {
+      const r = await fetch('http://10.137.89.126:5000/api/run-code', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ problemId, language: selectedLanguage, code: codeValue, customInput }),
       });
-      setRunResult(await r.json());
+      const data = await r.json();
+      setRunResult({
+        status: data.status,
+        stdout: data.stdout + (data.runtime_ms ? `\n\n[Execution Overhead: ${data.runtime_ms.toFixed(3)} ms]` : '')
+      });
     } catch { setRunResult({ status: 'Runtime Error', stderr: 'Sandbox dropped.' }); }
     finally { setIsRunningCode(false); }
   };
@@ -1093,7 +1164,7 @@ export default function ProblemWorkspace() {
                                 fontSize: 11, fontWeight: 700,
                                 color: m.c, letterSpacing: '.04em'
                               }}>
-                                {row.verdict || 'Evaluating'}
+                                {row.verdict || 'Evaluating'} {row.runtime_ms ? `(${row.runtime_ms.toFixed(1)}ms)` : ''}
                               </span>
                               <span style={{
                                 fontFamily: 'JetBrains Mono',
@@ -1126,6 +1197,9 @@ export default function ProblemWorkspace() {
                     })}
                   </div>
                 )}
+
+                {/* Mount the Live problem-specific competitive leaderboard grid module */}
+                <ProblemInnerLeaderboardGrid problemId={problemId} refreshTrigger={leaderboardRefresh} />
               </div>
             )}
           </div>
@@ -1283,7 +1357,7 @@ export default function ProblemWorkspace() {
                 padding: '8px 10px', minWidth: 0, overflow: 'hidden'
               }}>
                 <span className="mono" style={{
-                  fontSize: 8, fontWeight: 700, letterSpacing: '.1em',
+                  fontSize: 8, fontWoking: 700, letterSpacing: '.1em',
                   color: 'var(--text-4)', textTransform: 'uppercase',
                   flexShrink: 0
                 }}>stdout</span>
@@ -1388,7 +1462,9 @@ export default function ProblemWorkspace() {
                 <span style={{
                   overflow: 'hidden', textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap', maxWidth: 150
-                }}>{currentVerdict}</span>
+                }}>
+                  {currentVerdict}
+                </span>
               </div>
             )}
 

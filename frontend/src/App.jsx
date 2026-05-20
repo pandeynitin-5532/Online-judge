@@ -2,15 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import ProblemWorkspace from './ProblemWorkspace';
 import Leaderboard from './Leaderboard';
+import AuthModal from './AuthModal'; // Mount the custom glassmorphic security portal
+
+// Hard-mounted to your active host machine network IP address slot
+const API_BASE_URL = ' https://sasquatch-acrobat-divinely.ngrok-free.dev';
 
 // Elite Cyber Dashboard Component
-function ProblemDashboard() {
+function ProblemDashboard({ user, onLogout }) {
   const [problems, setProblems] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/problems')
+    fetch(`${API_BASE_URL}/api/problems`)
       .then((res) => res.json())
       .then((data) => {
         if (data.success) {
@@ -71,13 +75,15 @@ function ProblemDashboard() {
             </p>
           </div>
 
-          {/* Real-time Navigation Trigger Hook to Leaderboards */}
-          <button
-            onClick={() => navigate('/leaderboard')}
-            className="text-[10px] font-mono font-black tracking-widest bg-cyan-500/5 hover:bg-cyan-500/10 text-cyan-400 px-4 py-2 border border-cyan-500/20 rounded-xl transition-all duration-200 uppercase shadow-[0_0_15px_rgba(34,211,238,0.02)]"
-          >
-            RANK_BOARD ↗
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Real-time Navigation Trigger Hook to Leaderboards */}
+            <button
+              onClick={() => navigate('/leaderboard')}
+              className="text-[10px] font-mono font-black tracking-widest bg-cyan-500/5 hover:bg-cyan-500/10 text-cyan-400 px-4 py-2 border border-cyan-500/20 rounded-xl transition-all duration-200 uppercase shadow-[0_0_15px_rgba(34,211,238,0.02)]"
+            >
+              RANK_BOARD ↗
+            </button>
+          </div>
         </div>
 
         {/* Dynamic relational cards list */}
@@ -126,9 +132,17 @@ function ProblemDashboard() {
         
         {/* Terminal Matrix Footer Deck */}
         <div className="mt-8 flex justify-between items-center text-[9px] font-mono font-black text-zinc-600 uppercase tracking-widest border-t border-zinc-900/60 pt-4">
-          <div className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_#10b981] animate-pulse" />
-            <span>SOCKET CHANNEL: ONLINE</span>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_#10b981] animate-pulse" />
+              <span>OPERATOR: <span className="text-cyan-400">{user?.nickname || 'CONNECTED'}</span></span>
+            </div>
+            <button 
+              onClick={onLogout}
+              className="text-rose-500/60 hover:text-rose-400 transition-colors cursor-pointer border border-rose-500/10 bg-rose-500/5 px-2 py-0.5 rounded"
+            >
+              TERMINATE_SESSION
+            </button>
           </div>
           <span>LOADED_CHALLENGES: {problems.length}</span>
         </div>
@@ -140,15 +154,46 @@ function ProblemDashboard() {
 
 // Global Core Router Architecture
 function App() {
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+
+  // Identity state synchronization loop
+  useEffect(() => {
+    const token = localStorage.getItem('oj_token');
+    const savedUser = localStorage.getItem('oj_user');
+    
+    if (token && savedUser) {
+      setCurrentUser(JSON.parse(savedUser));
+    } else {
+      setIsAuthOpen(true); // Open authentication portal if no token is found
+    }
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('oj_token');
+    localStorage.removeItem('oj_user');
+    setCurrentUser(null);
+    setIsAuthOpen(true);
+  };
+
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<ProblemDashboard />} />
-        <Route path="/problem/:id" element={<ProblemWorkspace />} />
-        <Route path="/leaderboard" element={<Leaderboard />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Router>
+    <>
+      <Router>
+        <Routes>
+          <Route path="/" element={<ProblemDashboard user={currentUser} onLogout={handleLogout} />} />
+          <Route path="/problem/:id" element={<ProblemWorkspace />} />
+          <Route path="/leaderboard" element={<Leaderboard />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Router>
+
+      {/* Persistent Security Interceptor Overlay */}
+      <AuthModal 
+        isOpen={isAuthOpen} 
+        onClose={() => setIsAuthOpen(false)} 
+        onAuthSuccess={(user) => setCurrentUser(user)} 
+      />
+    </>
   );
 }
 

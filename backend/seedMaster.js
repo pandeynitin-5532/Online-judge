@@ -194,11 +194,71 @@ const masterMatrix = [
 ];
 
 db.serialize(() => {
-  console.log('--- PURGING OLD RECORDS & RE-SEEDING 10-PROBLEM MATRIX ---');
+  console.log('--- INITIALIZING RELATION MATRIX & PURGING OLD TABLES ---');
 
-  // Hard clear to fix any foreign key fragmentation
-  db.run("DELETE FROM test_cases");
-  db.run("DELETE FROM problems");
+  // 1. Drop existing structural traces to avoid alignment constraints during structural upgrade
+  db.run("DROP TABLE IF EXISTS test_cases");
+  db.run("DROP TABLE IF EXISTS submissions");
+  db.run("DROP TABLE IF EXISTS problems");
+  db.run("DROP TABLE IF EXISTS users");
+
+  // 2. Build Core Users Profile Table Matrix
+  db.run(`
+    CREATE TABLE users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT UNIQUE NOT NULL,
+      nickname TEXT UNIQUE,
+      dob TEXT,
+      profession TEXT,
+      otp_code TEXT,
+      otp_expires INTEGER,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // 3. Build Problems Matrix Table
+  db.run(`
+    CREATE TABLE problems (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL,
+      input_example TEXT,
+      output_example TEXT,
+      template_python TEXT,
+      template_cpp TEXT,
+      template_java TEXT,
+      metadata_json TEXT
+    )
+  `);
+
+  // 4. Build Test Cases Matrix Table
+  db.run(`
+    CREATE TABLE test_cases (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      problem_id TEXT,
+      input_data TEXT,
+      expected_output TEXT,
+      FOREIGN KEY (problem_id) REFERENCES problems(id)
+    )
+  `);
+
+  // 5. Build Upgraded Submissions Matrix Table with high-res telemetry metrics
+  db.run(`
+    CREATE TABLE submissions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      problem_id TEXT NOT NULL,
+      language TEXT NOT NULL,
+      code TEXT NOT NULL,
+      status TEXT NOT NULL,
+      runtime_ms REAL NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (problem_id) REFERENCES problems(id)
+    )
+  `);
+
+  console.log('--- RE-SEEDING 10-PROBLEM MATRIX ---');
 
   const stmtProblem = db.prepare(`
     INSERT INTO problems (id, title, description, input_example, output_example, template_python, template_cpp, template_java, metadata_json)
@@ -227,5 +287,5 @@ db.serialize(() => {
 
 db.close((err) => {
   if (err) console.error(err.message);
-  else console.log('\n🚀 ALL 10 PROBLEMS AND CORES SECURELY MOUNTED TO SQLITE DISK!');
+  else console.log('\n🚀 ALL UPDATED SCHEMAS SECURELY DESIGNED AND MOUNTED ON DISK!');
 });

@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+// Hard-mounted to your active host machine network IP address slot
+const API_BASE_URL = ' https://sasquatch-acrobat-divinely.ngrok-free.dev';
+
 export default function Leaderboard() {
   const [ranks, setRanks] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/leaderboard')
+    fetch(`${API_BASE_URL}/api/leaderboard`)
       .then(res => res.json())
       .then(data => {
         if (data.success) setRanks(data.leaderboard);
@@ -41,6 +44,8 @@ export default function Leaderboard() {
 
         {loading ? (
           <div className="text-zinc-600 font-mono text-xs animate-pulse tracking-wider">COMPILING SCORING INDICES...</div>
+        ) : ranks.length === 0 ? (
+          <div className="text-zinc-600 font-mono text-xs italic tracking-wider">NO COMPUTED USER METRICS LOGGED IN RELATION MATRIX.</div>
         ) : (
           <div className="flex flex-col gap-2">
             
@@ -53,7 +58,7 @@ export default function Leaderboard() {
               <div className="flex gap-12 text-right">
                 <span className="w-16">SOLVED</span>
                 <span className="w-16">ATTEMPTS</span>
-                <span className="w-16">STACK_CORE</span>
+                <span className="w-24 text-right">MEAN_CLOCK</span>
               </div>
             </div>
 
@@ -61,7 +66,7 @@ export default function Leaderboard() {
             {ranks.map((user, index) => (
               <div 
                 key={user.handle}
-                className="flex items-center justify-between bg-[#0e1017] border border-zinc-900 p-4 rounded-xl hover:border-zinc-800 transition duration-150"
+                className="flex items-center justify-between bg-[#0e1017]/80 backdrop-blur-xl border border-zinc-900 p-4 rounded-xl hover:border-zinc-800 transition duration-150"
               >
                 <div className="flex items-center gap-4">
                   <span className={`font-mono text-xs font-black min-w-[32px] ${index === 0 ? 'text-cyan-400' : 'text-zinc-600'}`}>
@@ -73,10 +78,15 @@ export default function Leaderboard() {
                 </div>
 
                 <div className="flex gap-12 items-center text-right text-xs font-mono font-bold">
+                  {/* Total Unique Solved Problems */}
                   <span className="w-16 text-emerald-400 font-black">{user.solvedCount}</span>
+                  
+                  {/* Total Code Submission Counts */}
                   <span className="w-16 text-zinc-500">{user.totalSubmissions}</span>
-                  <span className="w-16 text-[9px] border border-zinc-800 bg-zinc-950 px-1.5 py-0.5 rounded text-cyan-400 font-black uppercase tracking-wider">
-                    {user.topLanguage}
+                  
+                  {/* High Resolution Hardware Performance Metrics */}
+                  <span className="w-24 text-right text-cyan-400 font-black tracking-wide">
+                    {user.avgSpeedMs ? `${user.avgSpeedMs.toFixed(3)} ms` : '--'}
                   </span>
                 </div>
               </div>

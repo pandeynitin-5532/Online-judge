@@ -79,20 +79,20 @@ const compileCode = (command) => {
     return new Promise((resolve) => {
         exec(command, (error, stdout, stderr) => {
             if (error) {
-                resolve({ success: false, error: stderr || error.message });
-            } else {
-                resolve({ success: true });
+                return resolve({ success: false, error: stderr || error.message });
             }
+            resolve({ success: true });
         });
     });
 };
 
 /**
  * Executes code across ALL fetched test cases from your SQLite database
+ * Returns an object payload: { status: String, runtime_ms: Number }
  */
 const executeCode = async (language, code, testCases = []) => {
     if (!testCases || testCases.length === 0) {
-        return "❌ Missing Test Cases Configuration";
+        return { status: 'MISSING_TEST_CASES', runtime_ms: 0.0 };
     }
 
     const uniqueId = Date.now() + '-' + Math.round(Math.random() * 1E9);
@@ -339,7 +339,7 @@ public class Main_${cleanId} {
         const compilation = await compileCode(compileCommand);
         if (!compilation.success) {
             cleanUpFiles(language, filePath, uniqueId);
-            return `❌ Compilation Error: ${compilation.error}`;
+            return { status: 'COMPILE_ERROR', runtime_ms: 0.0 };
         }
         runCommand = `"${exeBinaryPath}"`;
     } 
@@ -349,7 +349,7 @@ public class Main_${cleanId} {
         const compilation = await compileCode(compileCommand);
         if (!compilation.success) {
             cleanUpFiles(language, filePath, uniqueId);
-            return `❌ Compilation Error: ${compilation.error}`;
+            return { status: 'COMPILE_ERROR', runtime_ms: 0.0 };
         }
         runCommand = `java -cp "${outputPath}" Main_${cleanId}`;
     }
@@ -357,15 +357,21 @@ public class Main_${cleanId} {
     const isPlaygroundRun = testCases.length === 1 && testCases[0].expected_output === "";
 
     if (isPlaygroundRun) {
+        const startClock = process.hrtime.bigint();
         const result = await runSingleTest(runCommand, testCases[0].input_data || '', 2000);
+        const endClock = process.hrtime.bigint();
+        
         cleanUpFiles(language, filePath, uniqueId);
+        const elapsedMs = Number(endClock - startClock) / 1000000.0;
+
         if (!result.success) {
-            return `❌ ${result.output}`;
+            return { status: result.output === 'TLE' ? 'TLE' : 'RUNTIME_ERROR', runtime_ms: elapsedMs };
         }
-        return result.output;
+        return { status: 'ACCEPTED', runtime_ms: elapsedMs };
     }
 
-    let verdict = "🎉 Accepted (AC)";
+    let statusVerdict = "ACCEPTED";
+    let cumulativeClockNs = BigInt(0);
 
     for (let i = 0; i < testCases.length; i++) {
         const currentCase = testCases[i];
@@ -375,13 +381,18 @@ public class Main_${cleanId} {
             .replace(/['"\r\n\s]/g, '')
             .toLowerCase();
 
+        // High-resolution hardware time capture bracket around evaluation runtime
+        const startClock = process.hrtime.bigint();
         const result = await runSingleTest(runCommand, inputString, 2000);
+        const endClock = process.hrtime.bigint();
+
+        cumulativeClockNs += (endClock - startClock);
 
         if (!result.success) {
             if (result.isTimeout) {
-                verdict = `⏱️ Time Limit Exceeded (TLE) on Test Case ${i + 1}`;
+                statusVerdict = "TLE";
             } else {
-                verdict = `❌ Runtime Error on Test Case ${i + 1}`;
+                statusVerdict = "RUNTIME_ERROR";
             }
             break; 
         }
@@ -395,13 +406,20 @@ public class Main_${cleanId} {
         console.log(`   -> Actual Output: [${actualOutput}] (Length: ${actualOutput.length})`);
 
         if (actualOutput !== expectedString) {
-            verdict = `❌ Wrong Answer (WA) on Test Case ${i + 1}`;
+            statusVerdict = "WRONG_ANSWER";
             break; 
         }
     }
 
     cleanUpFiles(language, filePath, uniqueId);
-    return verdict;
+    
+    // Cast BigInt nanoseconds over to float standard millisecond units
+    const finalElapsedMs = Number(cumulativeClockNs) / 1000000.0;
+
+    return {
+        status: statusVerdict,
+        runtime_ms: parseFloat(finalElapsedMs.toFixed(3))
+    };
 };
 
 const cleanUpFiles = (language, filePath, uniqueId) => {
