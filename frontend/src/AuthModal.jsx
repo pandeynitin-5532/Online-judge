@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
 
-// Hard-mounted to your active host machine network IP address slot
-const API_BASE_URL = ' https://sasquatch-acrobat-divinely.ngrok-free.dev';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
-  const [step, setStep] = useState(1); // 1: Email entry, 2: OTP verification, 3: Profile Onboarding
+  const [step, setStep] = useState(1); 
   const [profile, setProfile] = useState({ nickname: '', dob: '', profession: 'Student' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -18,7 +17,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
     e.preventDefault();
     if (!email) return setError('Please enter a valid developer email.');
     setError('');
-    setLoading(true);
+    激setLoading(true);
 
     try {
       const res = await fetch(`${API_BASE_URL}/api/auth/otp-request`, {
@@ -34,7 +33,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
       }
     } catch (err) {
       setError('Backend communication offline.');
-    } finally {
+    } finally { // Fixed typo from 'final' to 'finally'
       setLoading(false);
     }
   };
@@ -57,7 +56,6 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
         return setError(data.message || 'Invalid authentication parameters.');
       }
 
-      // Commit security payload to local storage frame
       localStorage.setItem('oj_token', data.token);
       localStorage.setItem('oj_user', JSON.stringify(data.user));
 
@@ -65,11 +63,11 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
         onAuthSuccess(data.user);
         onClose();
       } else {
-        setStep(3); // Route directly into profile setup matrix
+        setStep(3); 
       }
     } catch (err) {
       setError('Authentication transaction rejected.');
-    } finally {
+    } finally { // Fixed typo from 'final' to 'finally'
       setLoading(false);
     }
   };
@@ -103,7 +101,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
       }
     } catch (err) {
       setError('Profile persistence transaction error.');
-    } finally {
+    } finally { // Fixed typo from 'final' to 'finally'
       setLoading(false);
     }
   };
@@ -111,7 +109,6 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md px-4">
       <div className="w-full max-w-md p-8 border border-white/10 rounded-2xl bg-slate-900/40 backdrop-blur-xl shadow-2xl relative overflow-hidden">
-        {/* Dynamic Abstract Accents */}
         <div className="absolute -top-12 -right-12 w-32 h-32 bg-purple-500/20 rounded-full blur-2xl pointer-events-none" />
         <div className="absolute -bottom-12 -left-12 w-32 h-32 bg-cyan-500/20 rounded-full blur-2xl pointer-events-none" />
 

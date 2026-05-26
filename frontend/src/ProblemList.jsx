@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 export default function ProblemList() {
   const [problems, setProblems] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/problems')
+    fetch(`${API_BASE_URL}/api/problems`)
       .then((res) => res.json())
       .then((data) => {
         if (data.success) {
@@ -21,7 +23,6 @@ export default function ProblemList() {
       });
   }, []);
 
-  // Helper mock mapping for difficulties since they share a 10-problem matrix
   const getDifficultyBadge = (index) => {
     if (index % 3 === 0) return <span className="text-xs font-semibold px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Easy</span>;
     if (index % 3 === 1) return <span className="text-xs font-semibold px-2.5 py-1 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">Medium</span>;
@@ -32,7 +33,6 @@ export default function ProblemList() {
     <div className="min-h-screen w-screen bg-zinc-950 text-zinc-100 p-8 font-sans selection:bg-blue-500/30">
       <div className="max-w-5xl mx-auto">
         
-        {/* Header Dashboard Frame */}
         <div className="flex flex-col gap-1 border-b border-zinc-800 pb-6 mb-8">
           <h1 className="text-3xl font-extrabold tracking-tight text-white bg-gradient-to-r from-white via-zinc-200 to-zinc-500 bg-clip-text text-transparent">
             CodeMatrix Engine
@@ -45,7 +45,6 @@ export default function ProblemList() {
         ) : problems.length === 0 ? (
           <div className="text-zinc-500 italic text-sm">No problem profiles discovered in database file grid.</div>
         ) : (
-          /* Dashboard Grid Distribution */
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {problems.map((prob, idx) => (
               <div

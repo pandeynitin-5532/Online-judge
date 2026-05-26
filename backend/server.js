@@ -10,7 +10,12 @@ const nodemailer = require('nodemailer');
 const { executeCode } = require('./executeCode');
 
 const app = express();
-app.use(cors());
+
+// Enable universal CORS cross-origin mappings for deployment access routes
+app.use(cors({
+    origin: '*',
+    credentials: true
+}));
 app.use(express.json()); // To parse JSON request bodies
 
 const JWT_SECRET = process.env.JWT_SECRET || 'SUPER_COSMIC_SECRET_KEY_99X';
@@ -34,12 +39,12 @@ async function initializeDBAndServer() {
         });
 
         console.log('Database connected successfully. Schema tracking synchronized.');
-        
-        // Operational Diagnostic Debug Check
         console.log('Loaded Email Target:', process.env.EMAIL_USER); 
 
-        app.listen(5000, () => {
-            console.log('Backend Server running at http://localhost:5000/');
+        // Dynamic Port Allocation: Essential for deployment platforms like Railway/Render
+        const PORT = process.env.PORT || 5000;
+        app.listen(PORT, () => {
+            console.log(`Backend Server running dynamically on port ${PORT}`);
         });
     } catch (error) {
         console.error(`Database Initialization Error: ${error.message}`);
@@ -86,7 +91,7 @@ app.post('/api/auth/otp-request', async (req, res) => {
             [email, otp, expires, otp, expires]
         );
 
-        // Dispatch transactional verification code email message
+        // Dispatch transitional verification code email message
         await transporter.sendMail({
             from: process.env.EMAIL_USER,
             to: email,
@@ -291,7 +296,8 @@ app.get('/api/leaderboard', async (req, res) => {
             handle: row.handle || 'Anonymous Operator',
             solvedCount: row.solvedCount,
             totalSubmissions: row.totalSubmissions,
-            topLanguage: "Analyzed" // Placeholder if needed by original components
+            avgSpeedMs: row.avgSpeedMs,
+            topLanguage: "Analyzed" 
         }));
 
         res.json({ success: true, leaderboard });

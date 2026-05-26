@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Editor from '@monaco-editor/react';
 import { useParams, useNavigate } from 'react-router-dom';
- const API_BASE_URL ='https://sasquatch-acrobat-divinely.ngrok-free.dev';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 /* ═══════════════════════════════════════════════════════════════
    GLOBAL CSS — ZERO COMPROMISE EDITION
    ═══════════════════════════════════════════════════════════════ */
@@ -717,7 +719,7 @@ function ProblemInnerLeaderboardGrid({ problemId, refreshTrigger }) {
 
   const fetchRecords = () => {
     setLoading(true);
-    fetch(`http://10.137.89.126:5000/api/leaderboard/problem/${problemId}`)
+    fetch(`${API_BASE_URL}/api/leaderboard/problem/${encodeURIComponent(problemId)}`)
       .then(res => res.json())
       .then(data => {
         if (data.success) setRecords(data.leaderboard);
@@ -796,7 +798,7 @@ export default function ProblemWorkspace() {
   }, []);
 
   useEffect(() => {
-    fetch(`http://10.137.89.126:5000/api/problems/${problemId}`)
+    fetch(`${API_BASE_URL}/api/problems/${encodeURIComponent(problemId)}`)
       .then(r => r.json())
       .then(d => {
         if (d.success) {
@@ -819,7 +821,7 @@ export default function ProblemWorkspace() {
   const fetchHistory = () => {
     const token = localStorage.getItem('oj_token');
     setIsLoadingHistory(true);
-    fetch(`http://10.137.89.126:5000/api/problems/${problemId}/submissions`, {
+    fetch(`${API_BASE_URL}/api/problems/${encodeURIComponent(problemId)}/submissions`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
       .then(r => r.json())
@@ -839,7 +841,7 @@ export default function ProblemWorkspace() {
     setIsSubmitting(true);
     setCurrentVerdict('JUDGING...');
     try {
-      const r = await fetch('http://10.137.89.126:5000/api/submissions', {
+      const r = await fetch(`${API_BASE_URL}/api/submissions`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -866,7 +868,7 @@ export default function ProblemWorkspace() {
     setIsConsoleOpen(true);
     setRunResult(null);
     try {
-      const r = await fetch('http://10.137.89.126:5000/api/run-code', {
+      const r = await fetch(`${API_BASE_URL}/api/run-code`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -1113,7 +1115,7 @@ export default function ProblemWorkspace() {
             {/* ── SUBMISSIONS TAB ── */}
             {activeTab === 'submissions' && (
               <div className="fu" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyBetween: 'space-between' }}>
                   <div className="section-label">Submission History</div>
                   <button className="btn b-ghost" style={{ padding: '5px 12px', fontSize: 10 }} onClick={fetchHistory}>
                     <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
@@ -1193,12 +1195,12 @@ export default function ProblemWorkspace() {
                             Restore ↗
                           </button>
                         </div>
-                      );
+                       );
                     })}
                   </div>
                 )}
 
-                {/* Mount the Live problem-specific competitive leaderboard grid module */}
+                {/* Problem Inner Leadboard component tracking dynamic ID matrix state parameters natively */}
                 <ProblemInnerLeaderboardGrid problemId={problemId} refreshTrigger={leaderboardRefresh} />
               </div>
             )}
@@ -1217,7 +1219,7 @@ export default function ProblemWorkspace() {
 
           {/* ── Editor toolbar ── */}
           <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            display: 'flex', alignItems: 'center', justifyBetween: 'space-between',
             padding: '0 14px 0 10px',
             background: 'rgba(2,4,10,.9)',
             borderBottom: '1px solid var(--border)',
@@ -1303,7 +1305,7 @@ export default function ProblemWorkspace() {
           >
             {/* Console header */}
             <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              display: 'flex', alignItems: 'center', justifyBetween: 'space-between',
               padding: '8px 14px',
               background: 'rgba(2,4,10,.9)',
               borderBottom: '1px solid var(--border)',
@@ -1357,7 +1359,7 @@ export default function ProblemWorkspace() {
                 padding: '8px 10px', minWidth: 0, overflow: 'hidden'
               }}>
                 <span className="mono" style={{
-                  fontSize: 8, fontWoking: 700, letterSpacing: '.1em',
+                  fontSize: 8, fontWeight: 700, letterSpacing: '.1em',
                   color: 'var(--text-4)', textTransform: 'uppercase',
                   flexShrink: 0
                 }}>stdout</span>

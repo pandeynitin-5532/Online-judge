@@ -1,111 +1,69 @@
-const { exec } = require('child_process');
-const fs = require('fs');
+const axios = require('axios');
 const path = require('path');
-const { spawn } = require('child_process');
 
 // Require the same sqlite instance to look up metadata strings on the fly
 const sqlite3 = require('sqlite3').verbose();
 const dbPath = path.join(__dirname, 'database.db');
 
-const outputPath = path.join(__dirname, 'codes');
-if (!fs.existsSync(outputPath)) {
-    fs.mkdirSync(outputPath, { recursive: true });
-}
+// Map system strings to Piston's explicit execution runtime configurations
+const PISTON_LANG_MAP = {
+    python: { language: 'python', version: '3.10.0', ext: 'py' },
+    cpp: { language: 'cpp', version: '10.2.0', ext: 'cpp' },
+    java: { language: 'java', version: '15.0.2', ext: 'java' }
+};
 
 /**
- * Runs a single generated binary/file instance against an individual string input with a strict timeout
+ * Runs a single code string execution using Piston's isolated cloud sandbox API
  */
-const runSingleTest = (commandLine, inputStr, timeoutMs = 2000) => {
-    return new Promise((resolve) => {
-        const args = commandLine.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) || [];
-        const command = args.shift().replace(/['"]/g, '');
-        const cleanArgs = args.map(arg => arg.replace(/['"]/g, ''));
+const runSingleTestPiston = async (language, finalCode, inputStr, cleanJavaId) => {
+    try {
+        const langConfig = PISTON_LANG_MAP[language];
+        const filename = language === 'java' ? `Main_${cleanJavaId}.java` : `solution.${langConfig.ext}`;
 
-        const child = spawn(command, cleanArgs);
-        
-        let stdout = '';
-        let stderr = '';
-        let isTimeout = false;
+        const response = await axios.post('https://emkc.org/api/v2/piston/execute', {
+            language: langConfig.language,
+            version: langConfig.version,
+            files: [
+                {
+                    name: filename,
+                    content: finalCode
+                }
+            ],
+            stdin: inputStr || '',
+            run_timeout: 2000 // 2-second strict time limit checkpoint
+        });
 
-        const timer = setTimeout(() => {
-            isTimeout = true;
-            try {
-                child.kill('SIGKILL'); 
-            } catch (err) {
-                console.error("Failed to kill process:", err);
-            }
-        }, timeoutMs);
+        const run = response.data.run;
 
-        if (inputStr && child.stdin) {
-            child.stdin.write(String(inputStr) + "\n");
-            child.stdin.end();
-        } else if (child.stdin) {
-            child.stdin.end();
+        // Trace for Time Limit Exceeded flags triggered from Piston signals
+        if (run.signal === 'SIGKILL' || run.output?.includes('SIGKILL')) {
+            return { success: false, isTimeout: true, output: 'TLE' };
         }
 
-        child.stdout.on('data', (data) => {
-            stdout += data.toString();
-        });
+        // Catch non-zero exit signatures as errors
+        if (run.code !== 0) {
+            return { success: false, isTimeout: false, output: run.stderr || run.output || `Exit code ${run.code}` };
+        }
 
-        child.stderr.on('data', (data) => {
-            stderr += data.toString();
-        });
+        return { success: true, isTimeout: false, output: (run.stdout || '').trim() };
 
-        child.on('close', (code, signal) => {
-            clearTimeout(timer);
-
-            if (isTimeout || signal === 'SIGKILL' || signal === 'SIGTERM') {
-                return resolve({ success: false, isTimeout: true, output: 'TLE' });
-            }
-
-            if (code !== 0) {
-                return resolve({ success: false, isTimeout: false, output: stderr || `Exit code ${code}` });
-            }
-
-            resolve({ success: true, isTimeout: false, output: stdout.trim() });
-        });
-
-        child.on('error', (err) => {
-            clearTimeout(timer);
-            resolve({ success: false, isTimeout: false, output: err.message });
-        });
-    });
+    } catch (err) {
+        return { success: false, isTimeout: false, output: `Cloud Sandbox Routing Failure: ${err.message}` };
+    }
 };
 
 /**
- * Compiles code synchronously/separately so compilation time doesn't cause a false TLE
- */
-const compileCode = (command) => {
-    return new Promise((resolve) => {
-        exec(command, (error, stdout, stderr) => {
-            if (error) {
-                return resolve({ success: false, error: stderr || error.message });
-            }
-            resolve({ success: true });
-        });
-    });
-};
-
-/**
- * Executes code across ALL fetched test cases from your SQLite database
- * Returns an object payload: { status: String, runtime_ms: Number }
+ * Executes code across ALL fetched test cases using Piston cloud engine infrastructure
+ * Preserves 100% of your established driver architecture matrices safely
  */
 const executeCode = async (language, code, testCases = []) => {
     if (!testCases || testCases.length === 0) {
         return { status: 'MISSING_TEST_CASES', runtime_ms: 0.0 };
     }
 
-    const uniqueId = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const uniqueId = Date.now() + '_' + Math.round(Math.random() * 1E9);
     const cleanId = uniqueId.replace(/-/g, '_'); // Java class names cannot contain hyphens
     
-    let fileExtension = '';
-    if (language === 'python') fileExtension = 'py';
-    else if (language === 'cpp') fileExtension = 'cpp';
-    else if (language === 'java') fileExtension = 'java';
-
-    const filename = language === 'java' ? `Main_${cleanId}.java` : `${uniqueId}.${fileExtension}`;
-    const filePath = path.join(outputPath, filename);
-
     let finalCodeToExecute = code;
     const activeProblemId = testCases[0].problem_id;
 
@@ -201,7 +159,6 @@ std::vector<std::string> parseVectorString(const std::string& input) {
     return res;
 }
 
-// SFINAE Template Setup to intercept vectors and format print arrays safely
 template <typename T>
 typename std::enable_if<std::is_same<T, std::vector<std::string>>::value || std::is_same<T, std::vector<int>>::value, void>::type
 printResult(const T& val) {
@@ -325,53 +282,26 @@ public class Main_${cleanId} {
         }
     }
 
-    fs.writeFileSync(filePath, finalCodeToExecute);
-
-    let runCommand = '';
-    
-    if (language === 'python') {
-        runCommand = `python "${filePath}"`; 
-    } 
-    else if (language === 'cpp') {
-        const exeBinaryPath = path.join(outputPath, `${uniqueId}.out`);
-        const compileCommand = `g++ "${filePath}" -o "${exeBinaryPath}"`;
-        
-        const compilation = await compileCode(compileCommand);
-        if (!compilation.success) {
-            cleanUpFiles(language, filePath, uniqueId);
-            return { status: 'COMPILE_ERROR', runtime_ms: 0.0 };
-        }
-        runCommand = `"${exeBinaryPath}"`;
-    } 
-    else if (language === 'java') {
-        const compileCommand = `javac "${filePath}"`;
-        
-        const compilation = await compileCode(compileCommand);
-        if (!compilation.success) {
-            cleanUpFiles(language, filePath, uniqueId);
-            return { status: 'COMPILE_ERROR', runtime_ms: 0.0 };
-        }
-        runCommand = `java -cp "${outputPath}" Main_${cleanId}`;
-    }
-
     const isPlaygroundRun = testCases.length === 1 && testCases[0].expected_output === "";
 
+    // --- PLAYGROUND RUN PATHWAYS ---
     if (isPlaygroundRun) {
         const startClock = process.hrtime.bigint();
-        const result = await runSingleTest(runCommand, testCases[0].input_data || '', 2000);
+        const result = await runSingleTestPiston(language, finalCodeToExecute, testCases[0].input_data || '', cleanId);
         const endClock = process.hrtime.bigint();
         
-        cleanUpFiles(language, filePath, uniqueId);
         const elapsedMs = Number(endClock - startClock) / 1000000.0;
 
         if (!result.success) {
-            return { status: result.output === 'TLE' ? 'TLE' : 'RUNTIME_ERROR', runtime_ms: elapsedMs };
+            return { status: result.isTimeout ? 'TLE' : 'COMPILE_ERROR', stdout: result.output, runtime_ms: elapsedMs };
         }
-        return { status: 'ACCEPTED', runtime_ms: elapsedMs };
+        return { status: 'ACCEPTED', stdout: result.output, runtime_ms: elapsedMs };
     }
 
+    // --- OFFICIAL TEST CASING submissions RUNS ---
     let statusVerdict = "ACCEPTED";
     let cumulativeClockNs = BigInt(0);
+    let consolidatedStdout = "";
 
     for (let i = 0; i < testCases.length; i++) {
         const currentCase = testCases[i];
@@ -381,19 +311,15 @@ public class Main_${cleanId} {
             .replace(/['"\r\n\s]/g, '')
             .toLowerCase();
 
-        // High-resolution hardware time capture bracket around evaluation runtime
         const startClock = process.hrtime.bigint();
-        const result = await runSingleTest(runCommand, inputString, 2000);
+        const result = await runSingleTestPiston(language, finalCodeToExecute, inputString, cleanId);
         const endClock = process.hrtime.bigint();
 
         cumulativeClockNs += (endClock - startClock);
+        consolidatedStdout += `Test Case ${i + 1}:\n${result.output}\n\n`;
 
         if (!result.success) {
-            if (result.isTimeout) {
-                statusVerdict = "TLE";
-            } else {
-                statusVerdict = "RUNTIME_ERROR";
-            }
+            statusVerdict = result.isTimeout ? "TLE" : "RUNTIME_ERROR";
             break; 
         }
 
@@ -401,42 +327,19 @@ public class Main_${cleanId} {
             .replace(/['"\r\n\s]/g, '')
             .toLowerCase();
 
-        console.log(`[DEBUG COMPONENT] Matching Test Case ${i + 1}`);
-        console.log(`   -> Expected Row: [${expectedString}] (Length: ${expectedString.length})`);
-        console.log(`   -> Actual Output: [${actualOutput}] (Length: ${actualOutput.length})`);
-
         if (actualOutput !== expectedString) {
             statusVerdict = "WRONG_ANSWER";
             break; 
         }
     }
-
-    cleanUpFiles(language, filePath, uniqueId);
     
-    // Cast BigInt nanoseconds over to float standard millisecond units
     const finalElapsedMs = Number(cumulativeClockNs) / 1000000.0;
 
     return {
         status: statusVerdict,
+        stdout: consolidatedStdout,
         runtime_ms: parseFloat(finalElapsedMs.toFixed(3))
     };
-};
-
-const cleanUpFiles = (language, filePath, uniqueId) => {
-    try {
-        const cleanId = uniqueId.replace(/-/g, '_');
-        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-        if (language === 'cpp') {
-            const exeBinaryPath = path.join(outputPath, `${uniqueId}.out`);
-            if (fs.existsSync(exeBinaryPath)) fs.unlinkSync(exeBinaryPath);
-        }
-        if (language === 'java') {
-            const classPath = path.join(outputPath, `Main_${cleanId}.class`);
-            if (fs.existsSync(classPath)) fs.unlinkSync(classPath);
-        }
-    } catch (cleanupError) {
-        console.error("Storage cleanup error:", cleanupError);
-    }
 };
 
 module.exports = { executeCode };

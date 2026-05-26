@@ -5,11 +5,10 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   plugins: [
     react(),
-    tailwindcss(), 
+    tailwindcss(),
   ],
   server: {
-    host: true, // Guarantees Vite exposes ports to network layers
-    allowedHosts: ['.loca.lt'], // <-- Unlocks LocalTunnel connection routes globally
+    host: true, // This allows other people on your Wi-Fi network to visit your IP
     proxy: {
       '/api': {
         target: 'http://localhost:5000',

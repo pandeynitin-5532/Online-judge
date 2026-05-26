@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-// Hard-mounted to your active host machine network IP address slot
-const API_BASE_URL = ' https://sasquatch-acrobat-divinely.ngrok-free.dev';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 export default function Leaderboard() {
   const [ranks, setRanks] = useState([]);
@@ -26,7 +25,6 @@ export default function Leaderboard() {
     <div className="min-h-screen w-screen bg-[#0a0b10] text-zinc-300 font-sans p-6 md:p-12 overflow-x-hidden antialiased select-none">
       <div className="max-w-4xl mx-auto w-full relative z-10 animate-fadeIn">
         
-        {/* Navigation Core Panel Header */}
         <div className="flex items-center justify-between border-b border-zinc-900 pb-5 mb-8">
           <div className="flex items-center gap-3">
             <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee] animate-pulse" />
@@ -48,8 +46,6 @@ export default function Leaderboard() {
           <div className="text-zinc-600 font-mono text-xs italic tracking-wider">NO COMPUTED USER METRICS LOGGED IN RELATION MATRIX.</div>
         ) : (
           <div className="flex flex-col gap-2">
-            
-            {/* Table Header Layout */}
             <div className="flex items-center justify-between px-4 py-2 text-[9px] font-mono font-black text-zinc-600 uppercase tracking-widest">
               <div className="flex items-center gap-4">
                 <span className="w-8">RANK</span>
@@ -62,7 +58,6 @@ export default function Leaderboard() {
               </div>
             </div>
 
-            {/* Rank List Map Render */}
             {ranks.map((user, index) => (
               <div 
                 key={user.handle}
@@ -78,13 +73,8 @@ export default function Leaderboard() {
                 </div>
 
                 <div className="flex gap-12 items-center text-right text-xs font-mono font-bold">
-                  {/* Total Unique Solved Problems */}
                   <span className="w-16 text-emerald-400 font-black">{user.solvedCount}</span>
-                  
-                  {/* Total Code Submission Counts */}
                   <span className="w-16 text-zinc-500">{user.totalSubmissions}</span>
-                  
-                  {/* High Resolution Hardware Performance Metrics */}
                   <span className="w-24 text-right text-cyan-400 font-black tracking-wide">
                     {user.avgSpeedMs ? `${user.avgSpeedMs.toFixed(3)} ms` : '--'}
                   </span>
@@ -93,7 +83,6 @@ export default function Leaderboard() {
             ))}
           </div>
         )}
-
       </div>
     </div>
   );

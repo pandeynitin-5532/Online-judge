@@ -1,20 +1,28 @@
-# Ignore dependency folders
-backend/node_modules/
-frontend/node_modules/
+# Root Node Dependencies
+node_modules/
+dist/
+dist-ssr/
+*.local
+*.log
 
-# Ignore local environment variables
+# Backend Storage Blocks
+backend/node_modules/
+backend/database.db
+backend/database.db-journal
+backend/codes/
+
+# Frontend Ecosystem Blocks
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+
+# Critical Security Variables (Never Push to GitHub)
 .env
 backend/.env
 frontend/.env
 
-# Ignore production builds
-frontend/dist/
-frontend/build/
-
-# Ignore local SQLite database files so they don't overwrite each other in Git
-backend/database.db
-backend/database.db-journal
-
-# Operating system files
+# Editor and System files
+.vscode/
+.idea
 .DS_Store
 Thumbs.db
