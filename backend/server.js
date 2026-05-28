@@ -3,7 +3,7 @@ require('dotenv').config(); // Absolute top of the file to guarantee variable in
 const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend'); // Upgraded to enterprise REST API delivery client
 const { executeCode } = require('./executeCode');
 const { query } = require('./db'); // Clean production migration to PostgreSQL pool wrapper
 
@@ -18,27 +18,13 @@ app.use(express.json()); // To parse JSON request bodies
 
 const JWT_SECRET = process.env.JWT_SECRET || 'SUPER_COSMIC_SECRET_KEY_99X';
 
-// Nodemailer SMTP Transporter Configuration Setup
-// Replace your old nodemailer.createTransport block with this:
-const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true, // Use strict SSL/TLS direct tunnel on port 465
-    pool: true,   // Keeps connections open to bypass repetitive datacenter handshakes
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-    },
-    connectionTimeout: 5000, // 5 seconds max connection wait threshold
-    greetingTimeout: 5000,   // 5 seconds max SMTP greeting handshake window
-    socketTimeout: 5000      // 5 seconds max inactive payload socket threshold
-});
+// Initialize the Resend API client interface 
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Initialize Server Frame and Validate Connection Telemetry
 function initializeServer() {
     try {
         console.log('Database routing infrastructure successfully mapped to Neon PostgreSQL.');
-        console.log('Loaded Email Target:', process.env.EMAIL_USER); 
 
         // Dynamic Port Allocation: Essential for deployment platforms like Railway
         const PORT = process.env.PORT || 5000;
@@ -73,7 +59,7 @@ const authenticateToken = (req, res, next) => {
 
 // --- PHASE 1: IDENTITY ACCESS MANAGEMENT ROUTES ---
 
-// Step 1: Request 6-Digit Passwordless Verification OTP Code via SMTP
+// Step 1: Request 6-Digit Passwordless Verification OTP Code via Resend REST API
 app.post('/api/auth/otp-request', async (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ success: false, message: 'Email address field required' });
@@ -90,9 +76,9 @@ app.post('/api/auth/otp-request', async (req, res) => {
             [email, otp, expires]
         );
 
-        // Dispatch transitional verification code email message
-        await transporter.sendMail({
-            from: process.env.EMAIL_USER,
+        // Dispatch transitional verification code email using secure HTTPS payload calls
+        await resend.emails.send({
+            from: 'onboarding@resend.dev', // Default clean sandbox domain for instant verification testing
             to: email,
             subject: '🔥 Your Master OJ Verification Code',
             text: `Your temporary 6-digit access token is: ${otp}. It expires in 5 minutes.`
@@ -100,7 +86,7 @@ app.post('/api/auth/otp-request', async (req, res) => {
 
         return res.json({ success: true, message: 'Verification OTP token dispatched successfully.' });
     } catch (error) {
-        console.error(error);
+        console.error("Internal transaction loop crash inside otp-request:", error);
         return res.status(500).json({ success: false, message: 'Failed to process authorization transaction request.' });
     }
 });
@@ -114,7 +100,7 @@ app.post('/api/auth/otp-verify', async (req, res) => {
         const result = await query('SELECT * FROM users WHERE email = $1', [email]);
         const user = result.rows[0];
 
-        // Fixed case-sensitivity conversion handling properties for native pg engines safely
+        // Case-sensitivity resolution handling for native pg engines safely
         if (!user || user.otp_code !== otp || Date.now() > parseInt(user.otp_expires || 0)) {
             return res.status(400).json({ success: false, message: 'Invalid or expired verification parameters.' });
         }
@@ -155,7 +141,7 @@ app.post('/api/auth/onboard', authenticateToken, async (req, res) => {
     }
 });
 
-// --- CORE CORE EVALUATION ENGINE ROUTE UPDATES ---
+// --- CORE EVALUATION ENGINE ROUTE UPDATES ---
 
 // Sample Status Verification Probe Route
 app.get('/api/status', (req, res) => {
