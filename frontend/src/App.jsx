@@ -123,11 +123,11 @@ function ProblemDashboard({ user, onLogout }) {
               <span>OPERATOR: <span className="text-cyan-400">{user?.nickname || 'CONNECTED'}</span></span>
             </div>
             <button 
-              onClick={onLogout} {/* FIXED: Pointed directly to the destructured prop wrapper callback */}
-              className="text-rose-500/60 hover:text-rose-400 transition-colors cursor-pointer border border-rose-500/10 bg-rose-500/5 px-2 py-0.5 rounded"
-            >
-              TERMINATE_SESSION
-            </button>
+  onClick={onLogout}
+  className="text-rose-500/60 hover:text-rose-400 transition-colors cursor-pointer border border-rose-500/10 bg-rose-500/5 px-2 py-0.5 rounded"
+>
+  TERMINATE_SESSION
+</button>
           </div>
           <span>LOADED_CHALLENGES: {problems.length}</span>
         </div>
