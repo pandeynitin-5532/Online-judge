@@ -7,7 +7,6 @@ dist-ssr/
 
 # Backend Storage Blocks
 backend/node_modules/
-backend/database.db
 backend/database.db-journal
 backend/codes/
 
