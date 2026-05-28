@@ -65,7 +65,7 @@ function ProblemDashboard({ user, onLogout }) {
               </h1>
             </div>
             <p className="text-[10px] font-mono font-bold text-zinc-500 uppercase tracking-widest">
-              PROBING SYSTEM MODULE LAYERS // PARSING DOCK DATA ROWS FROM SQLITE BACKEND
+              PROBING SYSTEM MODULE LAYERS // PARSING DOCK DATA ROWS FROM CLOUD POSTGRESQL BACKEND
             </p>
           </div>
 
@@ -123,7 +123,7 @@ function ProblemDashboard({ user, onLogout }) {
               <span>OPERATOR: <span className="text-cyan-400">{user?.nickname || 'CONNECTED'}</span></span>
             </div>
             <button 
-              onClick={handleLogout}
+              onClick={onLogout} {/* FIXED: Pointed directly to the destructured prop wrapper callback */}
               className="text-rose-500/60 hover:text-rose-400 transition-colors cursor-pointer border border-rose-500/10 bg-rose-500/5 px-2 py-0.5 rounded"
             >
               TERMINATE_SESSION
