@@ -19,12 +19,19 @@ app.use(express.json()); // To parse JSON request bodies
 const JWT_SECRET = process.env.JWT_SECRET || 'SUPER_COSMIC_SECRET_KEY_99X';
 
 // Nodemailer SMTP Transporter Configuration Setup
+// Replace your old nodemailer.createTransport block with this:
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true, // Use strict SSL/TLS direct tunnel on port 465
+    pool: true,   // Keeps connections open to bypass repetitive datacenter handshakes
     auth: {
-        user: process.env.EMAIL_USER, // Your Gmail account string
-        pass: process.env.EMAIL_PASS  // Your 16-character secure App Password
-    }
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+    },
+    connectionTimeout: 5000, // 5 seconds max connection wait threshold
+    greetingTimeout: 5000,   // 5 seconds max SMTP greeting handshake window
+    socketTimeout: 5000      // 5 seconds max inactive payload socket threshold
 });
 
 // Initialize Server Frame and Validate Connection Telemetry
