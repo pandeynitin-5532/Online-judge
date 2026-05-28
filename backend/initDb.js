@@ -231,7 +231,7 @@ async function initDatabase() {
         process.exit(0);
 
     } catch (err) {
-        console.error("❌ Database Initialization Error:", err.message);
+        console.error("❌ Database Initialization Error:", err);
         process.exit(1);
     }
 }
