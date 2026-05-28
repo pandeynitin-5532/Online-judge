@@ -2,12 +2,10 @@ require('dotenv').config(); // Absolute top of the file to guarantee variable in
 
 const express = require('express');
 const cors = require('cors');
-const { open } = require('sqlite');
-const sqlite3 = require('sqlite3');
-const path = require('path');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 const { executeCode } = require('./executeCode');
+const { query } = require('./db'); // Clean production migration to PostgreSQL pool wrapper
 
 const app = express();
 
@@ -19,7 +17,6 @@ app.use(cors({
 app.use(express.json()); // To parse JSON request bodies
 
 const JWT_SECRET = process.env.JWT_SECRET || 'SUPER_COSMIC_SECRET_KEY_99X';
-let db;
 
 // Nodemailer SMTP Transporter Configuration Setup
 const transporter = nodemailer.createTransport({
@@ -30,29 +27,24 @@ const transporter = nodemailer.createTransport({
     }
 });
 
-// Initialize Database Connection and Start Server Frame
-async function initializeDBAndServer() {
+// Initialize Server Frame and Validate Connection Telemetry
+function initializeServer() {
     try {
-        db = await open({
-            filename: path.join(__dirname, 'database.db'),
-            driver: sqlite3.Database
-        });
-
-        console.log('Database connected successfully. Schema tracking synchronized.');
+        console.log('Database routing infrastructure successfully mapped to Neon PostgreSQL.');
         console.log('Loaded Email Target:', process.env.EMAIL_USER); 
 
-        // Dynamic Port Allocation: Essential for deployment platforms like Railway/Render
+        // Dynamic Port Allocation: Essential for deployment platforms like Railway
         const PORT = process.env.PORT || 5000;
         app.listen(PORT, () => {
             console.log(`Backend Server running dynamically on port ${PORT}`);
         });
     } catch (error) {
-        console.error(`Database Initialization Error: ${error.message}`);
+        console.error(`Server Boot Error: ${error.message}`);
         process.exit(1);
     }
 }
 
-initializeDBAndServer();
+initializeServer();
 
 // --- IDENTITY ACCESS MANAGEMENT MIDDLEWARE ---
 const authenticateToken = (req, res, next) => {
@@ -83,12 +75,12 @@ app.post('/api/auth/otp-request', async (req, res) => {
     const expires = Date.now() + 5 * 60 * 1000; // 5 minute validity window
 
     try {
-        // Upsert user row tracking metadata inside SQLite matrix
-        await db.run(
+        // Upsert user tracking metrics using PostgreSQL dynamic upsert schema
+        await query(
             `INSERT INTO users (email, otp_code, otp_expires) 
-             VALUES (?, ?, ?) 
-             ON CONFLICT(email) DO UPDATE SET otp_code = ?, otp_expires = ?`,
-            [email, otp, expires, otp, expires]
+             VALUES ($1, $2, $3) 
+             ON CONFLICT(email) DO UPDATE SET otp_code = $2, otp_expires = $3`,
+            [email, otp, expires]
         );
 
         // Dispatch transitional verification code email message
@@ -112,14 +104,15 @@ app.post('/api/auth/otp-verify', async (req, res) => {
     if (!email || !otp) return res.status(400).json({ success: false, message: 'Missing credentials fields' });
 
     try {
-        const user = await db.get('SELECT * FROM users WHERE email = ?', [email]);
+        const result = await query('SELECT * FROM users WHERE email = $1', [email]);
+        const user = result.rows[0];
 
-        if (!user || user.otp_code !== otp || Date.now() > user.otp_expires) {
+        if (!user || user.otp_code !== otp || Date.now() > parseInt(user.otp_expires)) {
             return res.status(400).json({ success: false, message: 'Invalid or expired verification parameters.' });
         }
 
         // Clear spent authentication code keys
-        await db.run('UPDATE users SET otp_code = NULL, otp_expires = NULL WHERE id = ?', [user.id]);
+        await query('UPDATE users SET otp_code = NULL, otp_expires = NULL WHERE id = $1', [user.id]);
 
         // Evaluate onboarding baseline completion criteria
         const isOnboarded = !!(user.nickname && user.dob && user.profession);
@@ -144,8 +137,8 @@ app.post('/api/auth/onboard', authenticateToken, async (req, res) => {
     }
 
     try {
-        await db.run(
-            'UPDATE users SET nickname = ?, dob = ?, profession = ? WHERE id = ?',
+        await query(
+            'UPDATE users SET nickname = $1, dob = $2, profession = $3 WHERE id = $4',
             [nickname, dob, profession, req.user.id]
         );
         return res.json({ success: true, message: 'Onboarding matrix complete. Identity authenticated.' });
@@ -158,14 +151,14 @@ app.post('/api/auth/onboard', authenticateToken, async (req, res) => {
 
 // Sample Status Verification Probe Route
 app.get('/api/status', (req, res) => {
-    res.json({ message: "Backend is connected and SQLite is ready!" });
+    res.json({ message: "Backend is connected and Neon PostgreSQL is ready!" });
 });
 
-// Get ALL dashboard system configuration nodes
+// Get ALL dashboard system problems
 app.get('/api/problems', async (req, res) => {
     try {
-        const rows = await db.all("SELECT id, title FROM problems");
-        res.json({ success: true, problems: rows });
+        const result = await query("SELECT id, title FROM problems ORDER BY id ASC");
+        res.json({ success: true, problems: result.rows });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -175,7 +168,8 @@ app.get('/api/problems', async (req, res) => {
 app.get('/api/problems/:id', async (req, res) => {
     const problemId = req.params.id;
     try {
-        const row = await db.get("SELECT * FROM problems WHERE id = ?", [problemId]);
+        const result = await query("SELECT * FROM problems WHERE id = $1", [problemId]);
+        const row = result.rows[0];
         if (!row) {
             return res.status(404).json({ success: false, message: "Problem not found" });
         }
@@ -195,19 +189,15 @@ app.post('/api/submissions', authenticateToken, async (req, res) => {
 
     try {
         console.log(`\n[Judging System] Fetching test cases for user ${req.user.id}: ${problemId}`);
-        const testCases = await db.all("SELECT * FROM test_cases WHERE problem_id = ?", [problemId]);
+        const result = await query("SELECT * FROM test_cases WHERE problem_id = $1", [problemId]);
         
-        // Deconstruct structural status and millisecond delta values directly from run wrapper
-        const { status, runtime_ms } = await executeCode(language, code, testCases);
+        // Deconstruct structural status and millisecond delta values directly from execution engine
+        const { status, runtime_ms } = await executeCode(language, code, result.rows);
 
-        const now = new Date();
-        const offsetMs = now.getTimezoneOffset() * 60 * 1000;
-        const localISOTime = new Date(now.getTime() - offsetMs).toISOString().replace('T', ' ').slice(0, 19);
-
-        await db.run(
-            `INSERT INTO submissions (user_id, problem_id, language, code, status, runtime_ms, created_at) 
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [req.user.id, problemId, language, code, status, runtime_ms, localISOTime]
+        await query(
+            `INSERT INTO submissions (user_id, problem_id, language, code, status, runtime_ms) 
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [req.user.id, problemId, language, code, status, runtime_ms]
         );
 
         console.log(`[Database Log] Submission recorded with speed metric: ${runtime_ms} ms`);
@@ -257,26 +247,26 @@ app.post('/api/run-code', authenticateToken, async (req, res) => {
 app.get('/api/problems/:id/submissions', authenticateToken, async (req, res) => {
     const problemId = String(req.params.id); 
     try {
-        const rows = await db.all(
+        const result = await query(
             `SELECT id, language, code, status AS verdict, runtime_ms, created_at AS submitted_at 
              FROM submissions 
-             WHERE problem_id = ? AND user_id = ?
+             WHERE problem_id = $1 AND user_id = $2
              ORDER BY created_at DESC`,
             [problemId, req.user.id]
         );
-        return res.json({ success: true, submissions: rows });
+        return res.json({ success: true, submissions: result.rows });
     } catch (error) {
         console.error("Error running history query:", error.message);
         return res.status(500).json({ success: false, error: "Failed to grab historical log rows." });
     }
 });
 
-// --- PHASE 4: THE SPEEDRUN LEADERBOARD MATRIX AGGREGATIONS ---
+// --- THE SPEEDRUN LEADERBOARD MATRIX AGGREGATIONS ---
 
 // Global Leaderboard Matrix Data Processing View Target
 app.get('/api/leaderboard', async (req, res) => {
     try {
-        const globalMatrix = await db.all(`
+        const result = await query(`
             SELECT 
                 u.id AS user_id,
                 u.nickname AS handle,
@@ -292,11 +282,11 @@ app.get('/api/leaderboard', async (req, res) => {
         `);
         
         // Map data formatting options to support structural backward compatibility layout
-        const leaderboard = globalMatrix.map(row => ({
+        const leaderboard = result.rows.map(row => ({
             handle: row.handle || 'Anonymous Operator',
-            solvedCount: row.solvedCount,
-            totalSubmissions: row.totalSubmissions,
-            avgSpeedMs: row.avgSpeedMs,
+            solvedCount: parseInt(row.solvedcount || 0),
+            totalSubmissions: parseInt(row.totalsubmissions || 0),
+            avgSpeedMs: parseFloat(row.avgspeedms || 0).toFixed(2),
             topLanguage: "Analyzed" 
         }));
 
@@ -306,11 +296,11 @@ app.get('/api/leaderboard', async (req, res) => {
     }
 });
 
-// Problem-Specific Inner Segment Solution Speedrun Ranking Target
+// Problem-Specific Inner Segment Solution Solution Ranking Target
 app.get('/api/leaderboard/problem/:problemId', async (req, res) => {
     const { problemId } = req.params;
     try {
-        const structuralLeaderboard = await db.all(`
+        const result = await query(`
             SELECT 
                 u.nickname AS handle,
                 s.language,
@@ -318,13 +308,13 @@ app.get('/api/leaderboard/problem/:problemId', async (req, res) => {
                 s.created_at AS solve_date
             FROM submissions s
             INNER JOIN users u ON s.user_id = u.id
-            WHERE s.problem_id = ? AND s.status = 'ACCEPTED'
-            GROUP BY s.user_id, s.language
+            WHERE s.problem_id = $1 AND s.status = 'ACCEPTED'
+            GROUP BY s.user_id, s.language, u.nickname, s.created_at
             ORDER BY best_runtime_ms ASC
             LIMIT 10
         `, [problemId]);
 
-        res.json({ success: true, leaderboard: structuralLeaderboard });
+        res.json({ success: true, leaderboard: result.rows });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
