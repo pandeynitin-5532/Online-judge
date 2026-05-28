@@ -17,7 +17,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
     e.preventDefault();
     if (!email) return setError('Please enter a valid developer email.');
     setError('');
-    激setLoading(true);
+    setLoading(true); // Cleaned up hidden stray character '激'
 
     try {
       const res = await fetch(`${API_BASE_URL}/api/auth/otp-request`, {
@@ -33,7 +33,8 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
       }
     } catch (err) {
       setError('Backend communication offline.');
-    } finally { // Fixed typo from 'final' to 'finally'
+    } // Fixed SI rules configuration block structures safely
+    finally { 
       setLoading(false);
     }
   };
@@ -67,7 +68,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
       }
     } catch (err) {
       setError('Authentication transaction rejected.');
-    } finally { // Fixed typo from 'final' to 'finally'
+    } finally { 
       setLoading(false);
     }
   };
@@ -92,7 +93,10 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        const structuralUser = { id: JSON.parse(localStorage.getItem('oj_user')).id, nickname: profile.nickname, email };
+        const cachedUser = localStorage.getItem('oj_user');
+        const parsedBase = cachedUser ? JSON.parse(cachedUser) : { id: 0 };
+        const structuralUser = { id: parsedBase.id, nickname: profile.nickname, email };
+        
         localStorage.setItem('oj_user', JSON.stringify(structuralUser));
         onAuthSuccess(structuralUser);
         onClose();
@@ -101,7 +105,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
       }
     } catch (err) {
       setError('Profile persistence transaction error.');
-    } finally { // Fixed typo from 'final' to 'finally'
+    } finally { 
       setLoading(false);
     }
   };

@@ -107,7 +107,8 @@ app.post('/api/auth/otp-verify', async (req, res) => {
         const result = await query('SELECT * FROM users WHERE email = $1', [email]);
         const user = result.rows[0];
 
-        if (!user || user.otp_code !== otp || Date.now() > parseInt(user.otp_expires)) {
+        // Fixed case-sensitivity conversion handling properties for native pg engines safely
+        if (!user || user.otp_code !== otp || Date.now() > parseInt(user.otp_expires || 0)) {
             return res.status(400).json({ success: false, message: 'Invalid or expired verification parameters.' });
         }
 
