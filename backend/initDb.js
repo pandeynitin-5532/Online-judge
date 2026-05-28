@@ -33,6 +33,21 @@ async function initDatabase() {
     try {
         console.log("Initializing PostgreSQL Database Architecture...");
 
+        // 0. Rebuild and verify the users database schema tracking matrix
+        await query(`
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                email TEXT UNIQUE NOT NULL,
+                nickname TEXT UNIQUE,
+                dob TEXT,
+                profession TEXT,
+                otp_code TEXT,
+                otp_expires BIGINT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        console.log("Users definition table successfully verified and active.");
+
         // 1. Rebuild the problems table with complete multi-language template slots
         await query(`DROP TABLE IF EXISTS problems CASCADE`);
         await query(`
