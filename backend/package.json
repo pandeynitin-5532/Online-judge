@@ -9,14 +9,13 @@
     "db:init": "node initDb.js"
   },
   "dependencies": {
-    "axios": "^1.7.9",
     "cors": "^2.8.5",
-    "dotenv": "^16.4.7",
-    "express": "^4.21.2",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
-    "nodemailer": "^6.10.0",
-    "pg": "^8.21.0"
-  },
+    "pg": "^8.11.5",
+    "resend": "^3.2.0" 
+},
   "engines": {
     "node": ">=20.0.0"
   }
