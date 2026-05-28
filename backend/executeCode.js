@@ -1,9 +1,5 @@
 const axios = require('axios');
-const path = require('path');
-
-// Require the same sqlite instance to look up metadata strings on the fly
-const sqlite3 = require('sqlite3').verbose();
-const dbPath = path.join(__dirname, 'database.db');
+const { query } = require('./db'); // Clean production migration to PostgreSQL pool wrapper
 
 // Map system strings to Piston's explicit execution runtime configurations
 const PISTON_LANG_MAP = {
@@ -67,15 +63,22 @@ const executeCode = async (language, code, testCases = []) => {
     let finalCodeToExecute = code;
     const activeProblemId = testCases[0].problem_id;
 
-    const localDb = new sqlite3.Database(dbPath);
-    const getMetadata = () => new Promise((res) => {
-        localDb.get("SELECT metadata_json FROM problems WHERE id = ?", [activeProblemId], (err, row) => {
-            res(row ? JSON.parse(row.metadata_json) : null);
-        });
-    });
+    // Fetch problem metadata from the cloud PostgreSQL instance asynchronously
+    const getMetadata = async () => {
+        try {
+            const result = await query("SELECT metadata_json FROM problems WHERE id = $1", [activeProblemId]);
+            const row = result.rows[0];
+            
+            if (!row) return null;
+            // PostgreSQL automatically parses JSONB types into objects, fallback to parse if it arrives as plain text
+            return typeof row.metadata_json === 'string' ? JSON.parse(row.metadata_json) : row.metadata_json;
+        } catch (err) {
+            console.error("Error pulling metadata within judging thread:", err.message);
+            return null;
+        }
+    };
     
     const meta = await getMetadata();
-    localDb.close();
 
     if (meta && meta.functionName) {
         // --- 1. PYTHON DRIVER ASSEMBLY ---
@@ -298,7 +301,7 @@ public class Main_${cleanId} {
         return { status: 'ACCEPTED', stdout: result.output, runtime_ms: elapsedMs };
     }
 
-    // --- OFFICIAL TEST CASING submissions RUNS ---
+    // --- OFFICIAL TEST CASING SUBMISSIONS RUNS ---
     let statusVerdict = "ACCEPTED";
     let cumulativeClockNs = BigInt(0);
     let consolidatedStdout = "";
